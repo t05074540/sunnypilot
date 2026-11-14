@@ -8,6 +8,8 @@ See the LICENSE.md file in the root directory for more details.
 from openpilot.cereal import messaging, custom
 from opendbc.car import structs
 from openpilot.common.constants import CV
+from openpilot.common.params import Params
+from openpilot.common.realtime import DT_MDL
 from openpilot.selfdrive.car.cruise import V_CRUISE_MAX
 from openpilot.selfdrive.controls.lib.accel_boost import AccelBoost
 from openpilot.sunnypilot.selfdrive.controls.lib.accel_boost import AccelBoostSP
@@ -17,6 +19,7 @@ from openpilot.sunnypilot.selfdrive.controls.lib.speed_limit.speed_limit_assist 
 from openpilot.sunnypilot.selfdrive.controls.lib.speed_limit.speed_limit_resolver import SpeedLimitResolver
 from openpilot.sunnypilot.selfdrive.selfdrived.events import EventsSP
 from openpilot.sunnypilot.models.helpers import get_active_bundle
+from openpilot.sunnypilot import PARAMS_UPDATE_PERIOD
 
 LongitudinalPlanSource = custom.LongitudinalPlanSP.LongitudinalPlanSource
 
@@ -33,6 +36,9 @@ class LongitudinalPlannerSP:
     self.e2e_alerts_helper = E2EAlertsHelper()
     self.accel_boost_sp = AccelBoostSP()
     self.openpilot_longitudinal = CP.openpilotLongitudinalControl
+    self.params_sp = Params()
+    self.frame_sp = -1
+    self.altis_long_tune = self.params_sp.get_bool("AltisLongTune")
 
     self.output_v_target = 0.
     self.output_a_target = 0.
@@ -68,6 +74,10 @@ class LongitudinalPlannerSP:
     return self.output_v_target, self.output_a_target
 
   def update(self, sm: messaging.SubMaster) -> None:
+    self.frame_sp += 1
+    if self.frame_sp % int(PARAMS_UPDATE_PERIOD / DT_MDL) == 0:
+      self.altis_long_tune = self.params_sp.get_bool("AltisLongTune")
+
     if self.accel_boost_sp.update_params():
       self.accel_boost = self.accel_boost_sp if self.accel_boost_sp.enabled and self.openpilot_longitudinal else AccelBoost()
 

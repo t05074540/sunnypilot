@@ -11,11 +11,13 @@ from openpilot.selfdrive.controls.lib.accel_boost import AccelBoost
 from openpilot.selfdrive.controls.lib.longcontrol import LongCtrlState
 from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import LongitudinalMpc, LongitudinalPlanSource
 from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import T_IDXS as T_IDXS_MPC
+from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import COMFORT_BRAKE, STOP_DISTANCE, get_T_FOLLOW
 from openpilot.selfdrive.controls.lib.drive_helpers import CONTROL_N, get_accel_from_plan, should_stop
 from openpilot.selfdrive.car.cruise import V_CRUISE_MAX, V_CRUISE_UNSET
 from openpilot.common.swaglog import cloudlog
 
 from openpilot.sunnypilot.selfdrive.controls.lib.longitudinal_planner import LongitudinalPlannerSP
+from openpilot.sunnypilot.selfdrive.controls.lib.altis.altis_long import AltisLongTune
 
 J_CRUISE_VALS = [1.6, 1.2, 0.8, 0.6]
 J_CRUISE_BP = [0., 10.0, 25., 40.]
@@ -39,6 +41,7 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
     self.fcw = False
     self.dt = dt
     self.accel_boost = AccelBoost()
+    self.altis = AltisLongTune(CP, COMFORT_BRAKE, STOP_DISTANCE, dt)
 
     self.v_desired_filter = FirstOrderFilter(init_v, 2.0, self.dt)
     self.a_cruise = init_a
@@ -106,7 +109,12 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
     output_a_target_e2e = sm['modelV2'].action.desiredAcceleration
     output_should_stop_e2e = sm['modelV2'].action.shouldStop
 
-    self.a_cruise = get_cruise_accel(v_cruise, v_ego, self.a_cruise, self.dt)
+    self.altis.enabled = self.altis_long_tune
+    if self.altis.active:
+      self.a_cruise = self.altis.cruise_accel(sm, v_cruise, v_ego, self.a_cruise,
+                                              get_T_FOLLOW(sm['selfdriveState'].personality), not long_control_off)
+    else:
+      self.a_cruise = get_cruise_accel(v_cruise, v_ego, self.a_cruise, self.dt)
     cruise_should_stop = should_stop(v_ego, self.a_cruise)
 
     output_a_target_e2e = self.accel_boost.update(sm, output_a_target_e2e, output_a_target_mpc, self.a_cruise)
@@ -117,6 +125,10 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
 
     output_a_target, self.mpc.source, _ = min(candidates, key=lambda c: c[0])
     self.output_should_stop = any(should_stop for _, _, should_stop in candidates)
+    if self.altis.active:
+      output_a_target = self.altis.shape_output(sm, output_a_target, a_prev, v_ego, reset_state,
+                                                self.mpc.source == LongitudinalPlanSource.e2e,
+                                                self.output_should_stop, self.fcw)
     self.output_a_target = np.clip(output_a_target, ACCEL_MIN, ACCEL_MAX)
 
     self.v_desired_filter.x = self.v_desired_filter.x + self.dt * (self.output_a_target + a_prev) / 2.0
