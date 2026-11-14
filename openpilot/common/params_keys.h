@@ -150,7 +150,15 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
 
     // --- sunnypilot params --- //
     {"AccelBoostSP", {PERSISTENT | BACKUP, BOOL, "1"}},
+    {"AltisAccelCurve", {PERSISTENT | BACKUP, BOOL, "1"}},
+    {"AltisAccelProfile", {PERSISTENT | BACKUP, INT, "1"}},
+    {"AltisBrakeOnset", {PERSISTENT | BACKUP, BOOL, "1"}},
+    {"AltisCurveComfort", {PERSISTENT | BACKUP, INT, "1"}},
+    {"AltisCurveSpeed", {PERSISTENT | BACKUP, BOOL, "1"}},
+    {"AltisLaneChangeGap", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"AltisLeadShaping", {PERSISTENT | BACKUP, BOOL, "1"}},
     {"AltisLongTune", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"AltisStandstillHold", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"ApiCache_DriveStats", {PERSISTENT, JSON}},
     {"AutoLaneChangeBsmDelay", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"AutoLaneChangeTimer", {PERSISTENT | BACKUP, INT, "0"}},

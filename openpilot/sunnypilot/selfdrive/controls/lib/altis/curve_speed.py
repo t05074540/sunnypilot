@@ -223,6 +223,7 @@ _WIND_DV = 5 * CV.KPH_TO_MS
 class CurveV2:
   def __init__(self):
     self.anticipate = True
+    self.lat_scale = 1.0   # on the comfort curve _V2_LAT_V: the Altis tune's curve comfort setting
     # winding road: kept across reset() (a press of the accelerator between bends does not forget them)
     self.wind_t = 0.
     self.wind_in = 0.
@@ -247,9 +248,9 @@ class CurveV2:
     ks = np.concatenate([kk[:1], (kk[:-2] + kk[1:-1] + kk[2:]) / 3, kk[-1:]]) / _V2_K_CAL
     kc = np.maximum(ks, 1e-4)
     # speed the comfort curve allows at each point; the allowance depends on the speed, so iterate
-    vv = np.sqrt(np.interp(v_ego * CV.MS_TO_KPH, _V2_LAT_BP, _V2_LAT_V) / kc)
+    vv = np.sqrt(self.lat_scale * np.interp(v_ego * CV.MS_TO_KPH, _V2_LAT_BP, _V2_LAT_V) / kc)
     for _ in range(2):
-      vv = np.sqrt(np.interp(vv * CV.MS_TO_KPH, _V2_LAT_BP, _V2_LAT_V) / kc)
+      vv = np.sqrt(self.lat_scale * np.interp(vv * CV.MS_TO_KPH, _V2_LAT_BP, _V2_LAT_V) / kc)
     v_lat = np.where(ks > 1e-4, vv, 99.)
     # speed the steering allows: the plan's lateral jerk where it is actually winding into a corner
     # (lateral >= 0.4 and rising, from _V2_JERK_T_MIN - see there), scaled to what will be asked on
@@ -328,16 +329,15 @@ class CurveV2:
       return _WIND_A if v_ego < self.wind_v_ref + _WIND_DV else 0.
     return np.inf
 
-  @staticmethod
-  def _far(x, ks, v_ego: float) -> float:
+  def _far(self, x, ks, v_ego: float) -> float:
     """From _FAR_T_BP[0] out: the corner taken as sharper than it looks, and only a lift or a light brake for it."""
     far = (_V2_T_IDX >= _FAR_T_BP[0]) & (ks > 1e-4)
     if not far.any():
       return np.inf
     kc = ks[far] * np.interp(_V2_T_IDX[far], _FAR_T_BP, _FAR_GAIN)
-    vv = np.sqrt(np.interp(v_ego * CV.MS_TO_KPH, _V2_LAT_BP, _V2_LAT_V) / kc)
+    vv = np.sqrt(self.lat_scale * np.interp(v_ego * CV.MS_TO_KPH, _V2_LAT_BP, _V2_LAT_V) / kc)
     for _ in range(2):
-      vv = np.sqrt(np.interp(vv * CV.MS_TO_KPH, _V2_LAT_BP, _V2_LAT_V) / kc)
+      vv = np.sqrt(self.lat_scale * np.interp(vv * CV.MS_TO_KPH, _V2_LAT_BP, _V2_LAT_V) / kc)
     vv = np.maximum(vv, V_FLOOR)
     d = np.maximum(x[far] - _V2_D_MARGIN_T * v_ego, 0.5 * x[far])
     need = float(((v_ego ** 2 - vv ** 2) / (2 * np.maximum(d, 2.))).max())

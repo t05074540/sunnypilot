@@ -225,6 +225,23 @@ class AEgoElement:
     return UiElement(value, "ACC.", self.unit, rl.WHITE)
 
 
+class AltisLimitElement:
+  LABELS = ("-", "FREE", "LEAD", "CHASE", "LAT", "CURVE", "WEAK", "COAST", "CUT", "ONSET", "HOLD")
+
+  @staticmethod
+  def is_active(sm) -> bool:
+    return bool(sm.valid['longitudinalPlanSP'] and sm['longitudinalPlanSP'].altis.active)
+
+  def update(self, sm, is_metric: bool) -> UiElement:
+    altis = sm['longitudinalPlanSP'].altis
+    limit = altis.limit.raw
+    value = self.LABELS[limit] if limit < len(self.LABELS) else "?"
+    if limit in (1, 2, 3, 4):   # a ceiling: show it
+      value += f" {altis.aCruiseMax:.2f}"
+    color = rl.WHITE if limit == 0 else rl.Color(255, 188, 0, 255)
+    return UiElement(value, "LIMIT", "", color)
+
+
 class LeadSpeedElement(LeadInfoElement):
   def __init__(self):
     self.unit = "km/h"

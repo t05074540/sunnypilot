@@ -88,7 +88,10 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
       self.mpc.set_cur_state(self.v_desired_filter.x, self.output_a_target)
     else:
       self.mpc.set_cur_state(v_ego, sm['carState'].aEgo)
-    self.mpc.update(sm['radarState'], personality=sm['selfdriveState'].personality)
+    t_follow = get_T_FOLLOW(sm['selfdriveState'].personality)
+    if self.altis.active:
+      t_follow = self.altis.lane_change_t_follow(sm, t_follow, v_ego, reset_state)
+    self.mpc.update(sm['radarState'], personality=sm['selfdriveState'].personality, t_follow=t_follow)
 
     self.v_desired_trajectory = np.interp(CONTROL_N_T_IDX, T_IDXS_MPC, self.mpc.v_solution)
     self.a_desired_trajectory = np.interp(CONTROL_N_T_IDX, T_IDXS_MPC, self.mpc.a_solution)
@@ -109,12 +112,11 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
     output_a_target_e2e = sm['modelV2'].action.desiredAcceleration
     output_should_stop_e2e = sm['modelV2'].action.shouldStop
 
-    self.altis.enabled = self.altis_long_tune
+    a_cruise_stock = get_cruise_accel(v_cruise, v_ego, self.a_cruise, self.dt)
     if self.altis.active:
-      self.a_cruise = self.altis.cruise_accel(sm, v_cruise, v_ego, self.a_cruise,
-                                              get_T_FOLLOW(sm['selfdriveState'].personality), not long_control_off)
+      self.a_cruise = self.altis.cruise_accel(sm, v_cruise, v_ego, self.a_cruise, t_follow, not long_control_off, a_cruise_stock)
     else:
-      self.a_cruise = get_cruise_accel(v_cruise, v_ego, self.a_cruise, self.dt)
+      self.a_cruise = a_cruise_stock
     cruise_should_stop = should_stop(v_ego, self.a_cruise)
 
     output_a_target_e2e = self.accel_boost.update(sm, output_a_target_e2e, output_a_target_mpc, self.a_cruise)
@@ -128,7 +130,10 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
     if self.altis.active:
       output_a_target = self.altis.shape_output(sm, output_a_target, a_prev, v_ego, reset_state,
                                                 self.mpc.source == LongitudinalPlanSource.e2e,
-                                                self.output_should_stop, self.fcw)
+                                                self.output_should_stop, self.fcw,
+                                                self.mpc.source == LongitudinalPlanSource.cruise)
+      # held behind a stopped car: keep the controller in its stopping state, not in PID at zero
+      self.output_should_stop = self.output_should_stop or self.altis.hold_active
     self.output_a_target = np.clip(output_a_target, ACCEL_MIN, ACCEL_MAX)
 
     self.v_desired_filter.x = self.v_desired_filter.x + self.dt * (self.output_a_target + a_prev) / 2.0

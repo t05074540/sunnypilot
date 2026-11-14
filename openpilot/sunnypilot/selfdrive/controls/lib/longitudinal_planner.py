@@ -20,6 +20,7 @@ from openpilot.sunnypilot.selfdrive.controls.lib.speed_limit.speed_limit_resolve
 from openpilot.sunnypilot.selfdrive.selfdrived.events import EventsSP
 from openpilot.sunnypilot.models.helpers import get_active_bundle
 from openpilot.sunnypilot import PARAMS_UPDATE_PERIOD
+from openpilot.sunnypilot.selfdrive.controls.lib.altis.altis_long import AltisSettings, LIMIT_NAMES
 
 LongitudinalPlanSource = custom.LongitudinalPlanSP.LongitudinalPlanSource
 
@@ -38,7 +39,6 @@ class LongitudinalPlannerSP:
     self.openpilot_longitudinal = CP.openpilotLongitudinalControl
     self.params_sp = Params()
     self.frame_sp = -1
-    self.altis_long_tune = self.params_sp.get_bool("AltisLongTune")
 
     self.output_v_target = 0.
     self.output_a_target = 0.
@@ -76,13 +76,27 @@ class LongitudinalPlannerSP:
   def update(self, sm: messaging.SubMaster) -> None:
     self.frame_sp += 1
     if self.frame_sp % int(PARAMS_UPDATE_PERIOD / DT_MDL) == 0:
-      self.altis_long_tune = self.params_sp.get_bool("AltisLongTune")
+      self._read_altis_params()
 
     if self.accel_boost_sp.update_params():
       self.accel_boost = self.accel_boost_sp if self.accel_boost_sp.enabled and self.openpilot_longitudinal else AccelBoost()
 
     self.events_sp.clear()
     self.e2e_alerts_helper.update(sm, self.events_sp)
+
+  def _read_altis_params(self) -> None:
+    p = self.params_sp
+    self.altis.enabled = p.get_bool("AltisLongTune")
+    self.altis.settings = AltisSettings(
+      accel_curve=p.get_bool("AltisAccelCurve"),
+      accel_profile=int(p.get("AltisAccelProfile", return_default=True)),
+      curve_speed=p.get_bool("AltisCurveSpeed"),
+      curve_comfort=int(p.get("AltisCurveComfort", return_default=True)),
+      lead_shaping=p.get_bool("AltisLeadShaping"),
+      brake_onset=p.get_bool("AltisBrakeOnset"),
+      lane_change_gap=p.get_bool("AltisLaneChangeGap"),
+      standstill_hold=p.get_bool("AltisStandstillHold"),
+    )
 
   def publish_longitudinal_plan_sp(self, sm: messaging.SubMaster, pm: messaging.PubMaster) -> None:
     plan_sp_send = messaging.new_message('longitudinalPlanSP')
@@ -132,6 +146,16 @@ class LongitudinalPlannerSP:
     assist.active = self.sla.is_active
     assist.vTarget = float(self.sla.output_v_target)
     assist.aTarget = float(self.sla.output_a_target)
+
+    # Altis longitudinal tune
+    altis = longitudinalPlanSP.altis
+    altis.active = self.altis.active
+    if self.altis.active:
+      altis.limit = LIMIT_NAMES[self.altis.limit]
+      altis.aCruiseMax = float(self.altis.a_cruise_max)
+      altis.followDistance = float(self.altis.follow_distance)
+      altis.tFollow = float(self.altis.t_follow)
+      altis.holding = self.altis.hold_active
 
     # E2E Alerts
     e2eAlerts = longitudinalPlanSP.e2eAlerts

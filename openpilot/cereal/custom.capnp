@@ -206,6 +206,7 @@ struct LongitudinalPlanSP @0xf35cc4560bbf6ec2 {
   aTarget @5 :Float32;
   events @6 :List(OnroadEventSP.Event);
   e2eAlerts @7 :E2eAlerts;
+  altis @8 :Altis;
 
   deprecated :group {
     dec @0 :DynamicExperimentalControlDEPRECATED;
@@ -311,6 +312,29 @@ struct LongitudinalPlanSP @0xf35cc4560bbf6ec2 {
   struct E2eAlerts {
     greenLightAlert @0 :Bool;
     leadDepartAlert @1 :Bool;
+  }
+
+  struct Altis {
+    active @0 :Bool;
+    limit @1 :Limit;  # what last held the acceleration back
+    aCruiseMax @2 :Float32;  # m/s^2, the cruise ceiling in force; 0 when the accel curve is off
+    followDistance @3 :Float32;  # m, the gap the MPC is working to behind the lead; 0 with no lead
+    tFollow @4 :Float32;  # s, the follow gap handed to the MPC
+    holding @5 :Bool;  # held stopped behind a lead that has not gone
+
+    enum Limit {
+      none @0;
+      free @1;  # the clear-road ceiling
+      lead @2;  # the ceiling with a lead in reach
+      chase @3;  # the raised ceiling behind a leaving lead
+      lateral @4;  # the cornering budget
+      curve @5;
+      weakLead @6;
+      coast @7;
+      cut @8;
+      brakeOnset @9;
+      hold @10;
+    }
   }
 }
 

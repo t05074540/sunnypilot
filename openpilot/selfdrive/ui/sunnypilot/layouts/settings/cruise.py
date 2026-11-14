@@ -70,6 +70,54 @@ class CruiseLayout(Widget):
                      "Toyota with sunnypilot longitudinal control only. The values were measured on another car and are a starting point."),
       param="AltisLongTune")
 
+    self.altis_accel_toggle = toggle_item_sp(
+      title=tr("Altis: Acceleration Curve"),
+      description=tr("Speed-dependent acceleration ceiling and a tapered approach to the set speed. Off: sunnypilot's own cruise acceleration."),
+      param="AltisAccelCurve")
+
+    self.altis_accel_profile = option_item_sp(
+      title=tr("Altis: Acceleration Strength"),
+      param="AltisAccelProfile",
+      min_value=0, max_value=2, value_change_step=1,
+      label_callback=lambda value: (tr("Gentle"), tr("Standard"), tr("Brisk"))[int(value)],
+      inline=True)
+
+    self.altis_curve_toggle = toggle_item_sp(
+      title=tr("Altis: Slow Before Curves"),
+      description=tr("Eases off before a curve the driving model can see, holds speed through it and picks up on the way out."),
+      param="AltisCurveSpeed")
+
+    self.altis_curve_comfort = option_item_sp(
+      title=tr("Altis: Curve Speed"),
+      param="AltisCurveComfort",
+      min_value=0, max_value=2, value_change_step=1,
+      label_callback=lambda value: (tr("Slower"), tr("Standard"), tr("Faster"))[int(value)],
+      inline=True)
+
+    self.altis_lead_toggle = toggle_item_sp(
+      title=tr("Altis: Lead Shaping"),
+      description=tr("No throttle towards a slower lead, no closing on a new lead before its speed is known, " +
+                     "and no speeding up at a lead the model is unsure about. Only ever takes acceleration away."),
+      param="AltisLeadShaping")
+
+    self.altis_brake_toggle = toggle_item_sp(
+      title=tr("Altis: Gradual Braking"),
+      description=tr("Braking for cruise or a lead builds up instead of arriving at once. Stands down for anything urgent, " +
+                     "for a stop and for braking the driving model asks for."),
+      param="AltisBrakeOnset")
+
+    self.altis_lc_toggle = toggle_item_sp(
+      title=tr("Altis: Lane Change Gap (Experimental)"),
+      description=tr("Follows at a shorter gap while a lane change is under way so the car does not brake as it moves across. " +
+                     "This follows closer than your chosen personality. Untested on this car."),
+      param="AltisLaneChangeGap")
+
+    self.altis_hold_toggle = toggle_item_sp(
+      title=tr("Altis: Standstill Hold (Experimental)"),
+      description=tr("Stopped behind a stopped car, stays stopped until that car has moved one metre on its own. " +
+                     "Press the accelerator to go at any time. Untested on this car."),
+      param="AltisStandstillHold")
+
     self.custom_acc_toggle = toggle_item_sp(
       title=tr("Custom ACC Speed Increments"),
       description="",
@@ -101,6 +149,14 @@ class CruiseLayout(Widget):
       self.scc_m_toggle,
       self.accel_boost_toggle,
       self.altis_long_toggle,
+      self.altis_accel_toggle,
+      self.altis_accel_profile,
+      self.altis_curve_toggle,
+      self.altis_curve_comfort,
+      self.altis_lead_toggle,
+      self.altis_brake_toggle,
+      self.altis_lc_toggle,
+      self.altis_hold_toggle,
       self.custom_acc_toggle,
       self.custom_acc_short_increment,
       self.custom_acc_long_increment,
@@ -124,6 +180,11 @@ class CruiseLayout(Widget):
     self._current_panel = panel
     if panel == PanelType.SLA:
       self._speed_limit_layout.show_event()
+
+  def _set_altis_items_enabled(self, enabled: bool):
+    for item in (self.altis_accel_toggle, self.altis_accel_profile, self.altis_curve_toggle, self.altis_curve_comfort,
+                 self.altis_lead_toggle, self.altis_brake_toggle, self.altis_lc_toggle, self.altis_hold_toggle):
+      item.action_item.set_enabled(enabled)
 
   def _update_state(self):
     super()._update_state()
@@ -152,7 +213,9 @@ class CruiseLayout(Widget):
           self.icbm_toggle.show_description(True)
 
       self.accel_boost_toggle.action_item.set_enabled(has_long)
-      self.altis_long_toggle.action_item.set_enabled(has_long and ui_state.CP.brand == "toyota")
+      altis_ok = has_long and ui_state.CP.brand == "toyota"
+      self.altis_long_toggle.action_item.set_enabled(altis_ok)
+      self._set_altis_items_enabled(altis_ok and ui_state.params.get_bool("AltisLongTune"))
 
       if has_long or has_icbm:
         self.custom_acc_toggle.action_item.set_enabled(((has_long and not ui_state.CP.pcmCruise) or has_icbm) and ui_state.is_offroad())
@@ -171,6 +234,7 @@ class CruiseLayout(Widget):
       self.icbm_toggle.action_item.set_enabled(False)
       self.accel_boost_toggle.action_item.set_enabled(False)
       self.altis_long_toggle.action_item.set_enabled(False)
+      self._set_altis_items_enabled(False)
       self.icbm_toggle.set_description(tr(ONROAD_ONLY_DESCRIPTION))
 
     show_custom_acc_desc = False
